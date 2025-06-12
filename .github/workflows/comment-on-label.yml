@@ -1,4 +1,4 @@
-=name: Comment on PR Label
+name: Comment on PR Label
 
 on:
   pull_request:
