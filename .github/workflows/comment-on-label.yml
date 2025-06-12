@@ -1,139 +1,86 @@
-name: Comment on `order` PR labels
+name: PR Comment for Order Label
 
 on:
   pull_request:
-    types: [labeled]
+    types: [labeled, unlabeled]
 
 jobs:
-  comment-on-order:
+  comment-on-label:
     runs-on: ubuntu-latest
+    if: github.event.pull_request.state == 'open'
     steps:
-      - name: Add comments for `order` label and HTTP methods
-        uses: actions/github-script@v7
+      - uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const { owner, repo } = context.repo;
-            const pr = context.payload.pull_request;
-            const prNumber = pr.number;
-            const prUrl = pr.html_url;
-            const branch = `${pr.head.ref} → ${pr.base.ref}`;
-            const author = pr.user.login;
-            const labels = pr.labels.map(label => label.name.toLowerCase());
+            const prNumber = context.payload.pull_request.number;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const labelName = context.payload.label?.name?.toLowerCase();
 
-            if (!labels.includes('order')) {
-              console.log('`order` 라벨이 없으므로 종료합니다.');
-              return;
-            }
+            const defaultCommentId = 'order-pr-label-bot';
+            const methodLabels = ['post', 'get', 'put', 'delete'];
 
-            // 📌 기존 코멘트 조회 (중복 방지용)
-            const existingComments = await github.rest.issues.listComments({
+            const comments = await github.rest.issues.listComments({
               owner,
               repo,
               issue_number: prNumber,
             });
 
-            // ✅ 기본 코멘트 작성
-            const baseId = 'order-pr-label-bot';
-            const hasBaseComment = existingComments.data.some(c =>
-              c.body.includes(`<!-- ${baseId} -->`)
-            );
+            const findCommentById = (id) =>
+              comments.data.find(c => c.body.includes(`<!-- ${id} -->`));
 
-            const methodLabels = ['post', 'get', 'put', 'delete'];
-            const attachedMethods = methodLabels.filter(m => labels.includes(m));
-            const missingMethodMessage = attachedMethods.length === 0
-              ? `\n\n❗ **요청 메서드 라벨이 감지되지 않았습니다.**\n\n\`post\`, \`get\`, \`put\`, \`delete\` 중 적절한 라벨을 추가해 주세요!`
-              : '';
+            if (context.payload.action === 'labeled') {
+              if (labelName === 'order') {
+                const existing = findCommentById(defaultCommentId);
+                if (!existing) {
+                  const body = `<!-- ${defaultCommentId} -->
+                  🔔 이 PR은 \`order\` 라벨이 지정되어 자동 안내를 수행합니다.
+                  
+                  ✅ 아래 HTTP 메서드 라벨 중 해당되는 것을 추가해주세요:
+                  
+                  \`post\`, \`get\`, \`put\`, \`delete\`
+                  
+                  라벨을 제거하면 해당 안내도 삭제됩니다.`;
+                  await github.rest.issues.createComment({
+                    owner,
+                    repo,
+                    issue_number: prNumber,
+                    body,
+                  });
+                }
+              }
 
-            if (!hasBaseComment) {
-              const baseComment = `<!-- ${baseId} -->
-              ### 📦 Order PR 라벨 안내 봇입니다
-              
-              이 PR에는 \`order\` 라벨이 감지되어 안내 코멘트를 작성합니다.  
-              이 봇은 PR에 HTTP 메서드 라벨이 붙어 있으면 각 요청 유형에 맞는 코멘트를 추가로 작성합니다.${missingMethodMessage}
-              
-              - PR: [#${prNumber}](${prUrl})
-              - 브랜치: \`${branch}\`
-              - 작성자: @${author}
-              
-              ---
-              _이 코멘트는 자동 생성되었습니다._ 🤖`;
-
-              await github.rest.issues.createComment({
-                owner,
-                repo,
-                issue_number: prNumber,
-                body: baseComment,
-              });
-              console.log('✅ 기본 코멘트 작성 완료');
-            } else {
-              console.log('ℹ️ 기본 코멘트는 이미 존재합니다. 생략함');
+              if (methodLabels.includes(labelName)) {
+                const id = `order-method-${labelName}`;
+                const existing = findCommentById(id);
+                if (!existing) {
+                  const body = `<!-- ${id} -->
+                  📦 \`${labelName.toUpperCase()}\` 메서드에 대한 처리를 확인해주세요.
+                  
+                  - API 명세, 예외 처리, 응답 포맷 등을 점검했나요?
+                  - 적절한 인증/권한 체크가 포함되어 있나요?
+                  `;
+                  await github.rest.issues.createComment({
+                    owner,
+                    repo,
+                    issue_number: prNumber,
+                    body,
+                  });
+                }
+              }
             }
 
-            // ✅ 메서드별 코멘트
-            const methodMessages = {
-              post: {
-                id: 'order-method-post',
-                body: `### 📬 POST 요청 처리 추가됨
-                
-                \`order\` 모듈에서 **POST 요청 처리**가 추가되었습니다.  
-                검토가 필요할 수 있습니다.
-                
-                - PR: [#${prNumber}](${prUrl})
-                - 브랜치: \`${branch}\`
-                - 작성자: @${author}
-                `
-            },
-            get: {
-              id: 'order-method-get',
-              body: `### 📥 GET 요청 처리 변경됨
-
-                \`order\` 모듈에서 **GET 요청 관련 변경**이 있습니다.
-                
-                - PR: [#${prNumber}](${prUrl})
-                - 브랜치: \`${branch}\`
-                - 작성자: @${author}
-                `
-              },
-              put: {
-                id: 'order-method-put',
-                body: `### 🛠️ PUT 요청 처리 수정됨
-                
-                \`order\` 모듈의 **PUT 요청 처리 로직**이 변경되었습니다.
-                
-                - PR: [#${prNumber}](${prUrl})
-                - 브랜치: \`${branch}\`
-                - 작성자: @${author}
-              `
-              },
-              delete: {
-                id: 'order-method-delete',
-                body: `### 🗑️ DELETE 요청 처리 포함됨
-  
-                \`order\` 모듈에 **DELETE 요청 처리**가 포함되어 있습니다.  
-                데이터 삭제 로직이 안전하게 동작하는지 확인해주세요.
-              
-              - PR: [#${prNumber}](${prUrl})
-              - 브랜치: \`${branch}\`
-              - 작성자: @${author}
-              `
-              },
-            };
-
-            for (const method of attachedMethods) {
-              const { id, body } = methodMessages[method];
-              const hasComment = existingComments.data.some(c =>
-                c.body.includes(`<!-- ${id} -->`)
-              );
-
-              if (!hasComment) {
-                await github.rest.issues.createComment({
-                  owner,
-                  repo,
-                  issue_number: prNumber,
-                  body: `<!-- ${id} -->\n${body}`,
-                });
-                console.log(`✅ ${method.toUpperCase()} 코멘트 작성 완료`);
-              } else {
-                console.log(`ℹ️ ${method.toUpperCase()} 코멘트는 이미 존재합니다. 생략함`);
+            if (context.payload.action === 'unlabeled') {
+              if (methodLabels.includes(labelName)) {
+                const id = `order-method-${labelName}`;
+                const existing = findCommentById(id);
+                if (existing) {
+                  await github.rest.issues.deleteComment({
+                    owner,
+                    repo,
+                    comment_id: existing.id,
+                  });
+                }
               }
             }
