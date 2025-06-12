@@ -1,0 +1,38 @@
+=name: Comment on PR Label
+
+on:
+  pull_request:
+    types: [labeled]
+
+jobs:
+  comment-on-label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check label and comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labelToCheck = 'backoffice'; // ✅ 원하는 라벨 이름
+            const commentBody = `
+            ## 🚀 자동 코멘트 알림
+            
+            라벨 **\`${labelToCheck}\`** 이(가) 추가되었습니다.  
+            아래 작업을 확인해주세요:
+            
+            - [ ] 항목 1
+            - [ ] 항목 2
+            - 📌 참고: [문서 링크](https://example.com)
+            
+            감사합니다! 🙌
+            `;
+            const prNumber = context.payload.pull_request.number;
+            const labelName = context.payload.label.name;
+
+            if (labelName === labelToCheck) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: commentBody,
+              });
+            }
