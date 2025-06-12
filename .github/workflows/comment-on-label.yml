@@ -31,16 +31,16 @@ jobs:
             }
 
             const commentBody = `
-### 🚀 Order PR 알림
-
-\`${moduleLabel}\`에 대한 **\`${matchedMethod.toUpperCase()}\` 요청** 변경이 감지되었습니다.
-
-- PR: [#${pr.number}](${pr.html_url})
-- 브랜치: \`${pr.head.ref}\` → \`${pr.base.ref}\`
-- 작성자: @${pr.user.login}
-
-검토 부탁드립니다 🙏
-`;
+            ### 🚀 Order PR 알림
+            
+            \`${moduleLabel}\`에 대한 **\`${matchedMethod.toUpperCase()}\` 요청** 변경이 감지되었습니다.
+            
+            - PR: [#${pr.number}](${pr.html_url})
+            - 브랜치: \`${pr.head.ref}\` → \`${pr.base.ref}\`
+            - 작성자: @${pr.user.login}
+            
+            검토 부탁드립니다 🙏
+            `;
 
             await github.rest.issues.createComment({
               owner,
